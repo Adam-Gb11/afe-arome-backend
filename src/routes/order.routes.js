@@ -1,7 +1,9 @@
-const router   = require('express').Router();
-const Order    = require('../models/order.model');
-const MenuItem = require('../models/menuItem.model');
-const Table    = require('../models/table.model');
+const router    = require('express').Router();
+const Order     = require('../models/order.model');
+const MenuItem  = require('../models/menuItem.model');
+const Table     = require('../models/table.model');
+const StockItem = require('../models/stockItem.model');
+const StockMovement = require('../models/stockMovement.model');
 
 // POST /api/orders
 router.post('/', async (req, res) => {
@@ -10,13 +12,11 @@ router.post('/', async (req, res) => {
     
     const { tableNumber, items, note } = req.body;
 
-    // trouver la table
     const table = await Table.findOne({ number: Number(tableNumber) });
     console.log('🪑 Table trouvée:', table);
     
     if (!table) return res.status(400).json({ message: `Table ${tableNumber} non trouvée` });
 
-    // enrichir les articles
     const enriched = [];
     let total = 0;
 
@@ -58,7 +58,6 @@ router.get('/', async (req, res) => {
     const filter = {};
     if (req.query.status) filter.status = req.query.status;
     
-    // Filtre par date
     if (req.query.date) {
       const start = new Date(req.query.date);
       start.setHours(0, 0, 0, 0);
@@ -78,12 +77,43 @@ router.get('/', async (req, res) => {
 router.patch('/:id/status', async (req, res) => {
   try {
     const { status } = req.body;
-    const order = await Order.findByIdAndUpdate(
-      req.params.id,
-      { status },
-      { new: true }
-    );
+    const order = await Order.findById(req.params.id);
     if (!order) return res.status(404).json({ message: 'Commande non trouvée' });
+
+    // ── Déduction automatique du stock quand "preparing" ──────────
+    if (status === 'preparing' && order.status === 'pending') {
+      for (const orderItem of order.items) {
+        // chercher les articles de stock liés à ce menuItem
+        const stockItems = await StockItem.find({
+          menuItems: orderItem.menuItem
+        });
+
+        for (const stockItem of stockItems) {
+          const qtyToDeduct = stockItem.quantityPerOrder * orderItem.quantity;
+          if (qtyToDeduct <= 0) continue;
+
+          // déduire la quantité
+          stockItem.quantity = Math.max(0, stockItem.quantity - qtyToDeduct);
+          await stockItem.save();
+
+          // enregistrer le mouvement
+          await StockMovement.create({
+            stockItem:  stockItem._id,
+            type:       'out',
+            quantity:   qtyToDeduct,
+            reason:     `Commande ${order.orderNumber} — ${orderItem.name}`,
+            orderId:    order._id,
+            createdBy:  'system',
+          });
+
+          console.log(`📉 Stock déduit: ${stockItem.name} -${qtyToDeduct} ${stockItem.unit}`);
+        }
+      }
+    }
+
+    order.status = status;
+    await order.save();
+
     res.json(order);
   } catch (err) {
     res.status(400).json({ message: err.message });
