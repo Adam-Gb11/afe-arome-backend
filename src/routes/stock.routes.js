@@ -1,8 +1,9 @@
 const router = require('express').Router();
 const StockItem     = require('../models/stockItem.model');
 const StockMovement = require('../models/stockMovement.model');
+const { upload } = require('../config/cloudinary');
 
-// ── GET /api/stock — tous les articles ──────────────────────────
+// ── GET /api/stock ──────────────────────────────────────────────
 router.get('/', async (req, res) => {
   try {
     const items = await StockItem.find().populate('supplier', 'name phone').sort({ name: 1 });
@@ -12,7 +13,7 @@ router.get('/', async (req, res) => {
   }
 });
 
-// ── GET /api/stock/alerts — articles en stock bas ───────────────
+// ── GET /api/stock/alerts ───────────────────────────────────────
 router.get('/alerts', async (req, res) => {
   try {
     const items = await StockItem.find().populate('supplier', 'name phone');
@@ -23,7 +24,7 @@ router.get('/alerts', async (req, res) => {
   }
 });
 
-// ── POST /api/stock — créer un article ──────────────────────────
+// ── POST /api/stock ─────────────────────────────────────────────
 router.post('/', async (req, res) => {
   try {
     const item = await StockItem.create(req.body);
@@ -33,7 +34,7 @@ router.post('/', async (req, res) => {
   }
 });
 
-// ── PATCH /api/stock/:id — modifier un article ──────────────────
+// ── PATCH /api/stock/:id ────────────────────────────────────────
 router.patch('/:id', async (req, res) => {
   try {
     const item = await StockItem.findByIdAndUpdate(req.params.id, req.body, { new: true });
@@ -43,7 +44,7 @@ router.patch('/:id', async (req, res) => {
   }
 });
 
-// ── DELETE /api/stock/:id — supprimer un article ─────────────────
+// ── DELETE /api/stock/:id ───────────────────────────────────────
 router.delete('/:id', async (req, res) => {
   try {
     await StockItem.findByIdAndDelete(req.params.id);
@@ -53,33 +54,36 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
-// ── POST /api/stock/:id/movement — ajouter un mouvement ─────────
-router.post('/:id/movement', async (req, res) => {
+// ── POST /api/stock/:id/movement — avec upload facture ──────────
+router.post('/:id/movement', upload.single('facture'), async (req, res) => {
   try {
     const { type, quantity, reason } = req.body;
     const item = await StockItem.findById(req.params.id);
     if (!item) return res.status(404).json({ message: 'Article non trouvé' });
 
-    // mettre à jour la quantité
-    if (type === 'in')         item.quantity += quantity;
-    else if (type === 'out')   item.quantity = Math.max(0, item.quantity - quantity);
-    else if (type === 'adjustment') item.quantity = quantity;
+    if (type === 'in')              item.quantity += Number(quantity);
+    else if (type === 'out')        item.quantity = Math.max(0, item.quantity - Number(quantity));
+    else if (type === 'adjustment') item.quantity = Number(quantity);
 
     await item.save();
 
-    // enregistrer le mouvement
     const movement = await StockMovement.create({
-      stockItem: item._id,
-      type, quantity, reason
-    });
-
-    res.json({ item, movement });
-  } catch (err) {
-    res.status(400).json({ message: err.message });
-  }
+  stockItem:  item._id,
+  type,
+  quantity:   Number(quantity),
+  unitCost:   type === 'in' ? Number(req.body.unitCost || 0) : 0,
+  totalCost:  type === 'in' ? Number(quantity) * Number(req.body.unitCost || 0) : 0,
+  reason,
+  factureUrl: req.file?.path || null,
 });
 
-// ── GET /api/stock/:id/history — historique d'un article ────────
+res.json({ item, movement });
+} catch (err) {
+  res.status(400).json({ message: err.message });
+}
+});
+
+// ── GET /api/stock/:id/history ──────────────────────────────────
 router.get('/:id/history', async (req, res) => {
   try {
     const history = await StockMovement.find({ stockItem: req.params.id }).sort({ createdAt: -1 }).limit(50);

@@ -20,6 +20,16 @@ async function seed() {
     role:     'admin',
   });
   console.log('✅ Admin créé');
+  const gerantExists = await User.findOne({ email: 'gerant@the-elo.tn' });
+if (!gerantExists) {
+  await User.create({
+    name:     'Gérant Café',
+    email:    'gerant@the-elo.tn',
+    password: 'Gerant1234!',
+    role:     'staff',
+  });
+  console.log('✅ Gérant créé');
+}
 
   // ── Menu ───────────────────────────────────────────────
   await MenuItem.insertMany([
@@ -64,8 +74,8 @@ async function seed() {
   console.log('✅ 20 tables créées');
 
   console.log('\n🎉 Base de données prête !');
- console.log('📧 admin@the-elo.tn');
-console.log('🔑 Admin1234!');
+  console.log('📧 admin@the-elo.tn');
+  console.log('🔑 Admin1234!');
   await mongoose.disconnect();
 }
 

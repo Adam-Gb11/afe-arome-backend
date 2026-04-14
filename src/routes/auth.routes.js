@@ -15,7 +15,7 @@ router.post('/login', async (req, res) => {
     const ok = await user.matchPassword(password);
     if (!ok) return res.status(401).json({ message: 'Mot de passe incorrect' });
 
-    // générer le token JWT
+    
     const token = jwt.sign(
       { id: user._id },
       process.env.JWT_SECRET,
