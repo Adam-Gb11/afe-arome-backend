@@ -7,6 +7,7 @@ const orderItemSchema = new mongoose.Schema({
   price:    { type: Number, required: true },
   quantity: { type: Number, required: true },
   subtotal: { type: Number, required: true },
+  selectedOptions: { type: Object, default: {} },
 });
 
 const orderSchema = new mongoose.Schema({
@@ -18,12 +19,11 @@ const orderSchema = new mongoose.Schema({
   note:         { type: String },
   status: {
     type:    String,
-    enum:    ['pending', 'preparing', 'ready', 'delivered', 'cancelled','billed'],
+    enum:    ['pending', 'preparing', 'ready', 'delivered', 'cancelled', 'billed'],
     default: 'pending',
   },
 }, { timestamps: true });
 
-// générer le numéro de commande automatiquement
 orderSchema.pre('save', async function () {
   if (!this.orderNumber) {
     const count = await this.constructor.countDocuments();
