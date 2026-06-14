@@ -4,12 +4,12 @@ const connectDB = async () => {
   // Essaie d'abord Atlas (cloud)
   try {
     const conn = await mongoose.connect(process.env.MONGO_URI, {
-      serverSelectionTimeoutMS: 5000,
+      serverSelectionTimeoutMS: 1000,
+      connectTimeoutMS: 1000,
     });
     console.log(`✅ MongoDB Atlas connecté: ${conn.connection.host}`);
   } catch (err) {
     console.warn(`⚠️ Atlas indisponible — bascule vers MongoDB local...`);
-    // Bascule vers MongoDB local
     try {
       const conn = await mongoose.connect(process.env.MONGO_URI_LOCAL);
       console.log(`✅ MongoDB Local connecté: ${conn.connection.host}`);
